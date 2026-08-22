@@ -1,0 +1,6 @@
+{
+  "name": "Q-Shield Enterprise Post-Quantum Security Platform",
+  "description": "Internal enterprise operations platform for cyber security, NIST PQC cryptographic migration, threat telemetry, and quantum-safe key infrastructure.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
