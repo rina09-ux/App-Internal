@@ -1,5 +1,7 @@
 import { NUSASEC_CORE_URL } from '../config/platform';
 
+const CORE_REQUEST_TIMEOUT_MS = 20000;
+
 export class CoreApiError extends Error {
   status: number;
   details: unknown;
@@ -18,23 +20,32 @@ function requestId(): string {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+function timeoutSignal(existing?: AbortSignal | null): AbortSignal {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CORE_REQUEST_TIMEOUT_MS);
+  if (existing) {
+    if (existing.aborted) controller.abort();
+    else existing.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  controller.signal.addEventListener('abort', () => window.clearTimeout(timeout), { once: true });
+  return controller.signal;
+}
+
 let csrfToken: string | null = null;
 
-async function getCsrfToken(): Promise<string | null> {
+async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
-  try {
-    const response = await fetch(`${NUSASEC_CORE_URL.replace(/\/$/, '')}/api/v1/auth/csrf`, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-    if (!response.ok) return null;
-    const body = await response.json() as { csrf_token?: string };
-    csrfToken = body.csrf_token || null;
-    return csrfToken;
-  } catch {
-    return null;
-  }
+  const response = await fetch(`${NUSASEC_CORE_URL.replace(/\/$/, '')}/api/v1/auth/csrf`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+    signal: timeoutSignal(),
+  });
+  if (!response.ok) throw new CoreApiError(response.status, `Unable to obtain Core CSRF token (${response.status})`);
+  const body = await response.json() as { csrf_token?: string };
+  if (!body.csrf_token) throw new CoreApiError(502, 'Core did not return a valid CSRF token');
+  csrfToken = body.csrf_token;
+  return csrfToken;
 }
 
 export function clearCoreCsrfToken() { csrfToken = null; }
@@ -45,17 +56,28 @@ export async function coreRequest<T>(path: string, init: RequestInit = {}): Prom
   headers.set('Accept', 'application/json');
   headers.set('X-Request-ID', requestId());
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  if (init.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
+  const method = (init.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const token = await getCsrfToken();
-    if (token) headers.set('X-CSRF-Token', token);
+    headers.set('X-CSRF-Token', token);
   }
 
-  const response = await fetch(url, {
-    ...init,
-    headers,
-    credentials: 'include',
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      method,
+      headers,
+      credentials: 'include',
+      cache: 'no-store',
+      signal: timeoutSignal(init.signal),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new CoreApiError(408, 'NusaSec-Core request timed out or was cancelled');
+    }
+    throw error;
+  }
 
   const text = await response.text();
   let body: unknown = null;
@@ -67,50 +89,15 @@ export async function coreRequest<T>(path: string, init: RequestInit = {}): Prom
     const detail = typeof body === 'object' && body !== null && 'detail' in body
       ? String((body as { detail?: unknown }).detail ?? response.statusText)
       : response.statusText || `Core request failed (${response.status})`;
-    if (response.status === 403 && init.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
-      csrfToken = null;
-    }
+    if (response.status === 401 || response.status === 403) csrfToken = null;
     throw new CoreApiError(response.status, detail, body);
   }
 
   return body as T;
 }
 
-export type InternalCommandCenterSnapshot = {
-  schema: string;
-  generated_at: string;
-  executive: {
-    customers: number;
-    active_subscriptions: number;
-    open_work_items: number;
-    unhealthy_customers: number;
-    open_opportunities: number;
-  };
-  security_operations: {
-    critical_or_high_remediation: number;
-    overdue_remediation: number;
-    expired_risk_exceptions: number;
-    running_scans: number;
-    evidence_objects: number;
-  };
-  governance: {
-    active_regulatory_changes: number;
-    unread_internal_notifications: number;
-  };
-};
-
-export type InternalCryptoTelemetry = {
-  schema: string;
-  available: boolean;
-  generated_at: string;
-  window_minutes: number;
-  events_observed: number;
-  critical_or_error: number;
-  average_latency_ms: number | null;
-  ops_per_second: number | null;
-  worker_units: number | null;
-};
-
+export type InternalCommandCenterSnapshot = { schema: string; generated_at: string; executive: { customers: number; active_subscriptions: number; open_work_items: number; unhealthy_customers: number; open_opportunities: number; }; security_operations: { critical_or_high_remediation: number; overdue_remediation: number; expired_risk_exceptions: number; running_scans: number; evidence_objects: number; }; governance: { active_regulatory_changes: number; unread_internal_notifications: number; }; };
+export type InternalCryptoTelemetry = { schema: string; available: boolean; generated_at: string; window_minutes: number; events_observed: number; critical_or_error: number; average_latency_ms: number | null; ops_per_second: number | null; worker_units: number | null; };
 export type CoreApiKey = { id: number; name: string; description?: string; product_code: string; key_prefix: string; status: string; created_at?: string; revoked_at?: string | null; last_used_at?: string | null; };
 
 export const coreApi = {
