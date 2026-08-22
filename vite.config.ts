@@ -4,7 +4,9 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => ({
-  base: process.env.VITE_BASE_PATH || '/App-Internal/',
+  // Relative assets keep the build working on GitHub Pages (/App-Internal/)
+  // as well as on a custom root domain or alternate host.
+  base: process.env.VITE_BASE_PATH || './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
