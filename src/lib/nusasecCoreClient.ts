@@ -136,6 +136,7 @@ export const coreApi = {
   getCommandCenter: () => coreRequest<InternalCommandCenterSnapshot>('/api/v1/internal-experience/command-center'),
   getCryptoTelemetry: () => coreRequest<InternalCryptoTelemetry>('/api/v1/platform/internal-crypto-telemetry'),
   createSalesOpportunity: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/sales/opportunities', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSalesOpportunity: (id: number, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal/sales/opportunities/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createCustomerHealth: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/customer-success/health', { method: 'POST', body: JSON.stringify(payload) }),
   createSupportTicket: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/support/tickets', { method: 'POST', body: JSON.stringify(payload) }),
   createInvoice: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/finance/invoices', { method: 'POST', body: JSON.stringify(payload) }),
@@ -145,7 +146,8 @@ export const coreApi = {
   approveEngineeringChange: (id: number) => coreRequest<any>(`/api/v1/internal/engineering/changes/${id}/approve`, { method: 'POST' }),
   createProductInitiative: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/product/initiatives', { method: 'POST', body: JSON.stringify(payload) }),
   createWorkItem: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/work', { method: 'POST', body: JSON.stringify(payload) }),
+  updateWorkItem: (id: number, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal/work/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createDocument: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/documents', { method: 'POST', body: JSON.stringify(payload) }),
-  updatePricing: (productCode: string, planCode: string, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal-pricing/plans/${encodeURIComponent(productCode)}/${encodeURIComponent(planCode)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  updatePricing: (productCode: string, planCode: string, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal-ops/pricing/${encodeURIComponent(productCode)}/${encodeURIComponent(planCode)}`, { method: 'PUT', body: JSON.stringify(payload) }),
   updateAccountStatus: (id: number, status: 'ACTIVE' | 'SUSPENDED' | 'OFFBOARDING') => coreRequest<any>(`/api/v1/internal/identity/accounts/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
 };
