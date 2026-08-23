@@ -259,7 +259,7 @@ export function App() {
   const handleOpenCreateModal = (modalType: string, initialData?: any) => { setEditingData(initialData || null); setActiveEditorModal(modalType); };
   const handleCloseEditor = () => { setActiveEditorModal(null); setEditingData(null); };
 
-  const handleSaveCustomer = async (customer: CustomerProfile) => {
+  const handleSaveCustomer = async (customer: CustomerProfile): Promise<boolean> => {
     if (INTERNAL_DEMO_MODE) {
       setCustomers((prev) => {
         const idx = prev.findIndex((c) => c.tenant_id === customer.tenant_id);
@@ -271,7 +271,7 @@ export function App() {
         return [customer, ...prev];
       });
       showToast(`Tenant "${customer.display_name}" updated in demo mode`);
-      return;
+      return true;
     }
     try {
       const result = await coreApi.updateCustomer(customer.tenant_id, {
@@ -295,14 +295,16 @@ export function App() {
         return [authoritative, ...prev];
       });
       showToast(`Tenant "${authoritative.display_name}" saved to NusaSec-Core`);
+      return true;
     } catch (error) {
       showToast(`Customer save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+      return false;
     }
   };
 
   const handleSaveIncident = (incident: EngineeringIncident) => { if (!INTERNAL_DEMO_MODE) { showToast('Incident mutation is not yet wired to a canonical Core contract.'); return; } setIncidents((prev) => { const idx = prev.findIndex((i) => i.incident_key === incident.incident_key); if (idx >= 0) { const next = [...prev]; next[idx] = incident; return next; } return [incident, ...prev]; }); showToast(`Incident "${incident.incident_key}" saved in demo mode`); };
 
-  const handleSaveRemediation = async (rem: SecurityRemediationTask) => {
+  const handleSaveRemediation = async (rem: SecurityRemediationTask): Promise<boolean> => {
     if (INTERNAL_DEMO_MODE) {
       setRemediations((prev) => {
         const idx = prev.findIndex((r) => r.id === rem.id);
@@ -314,7 +316,7 @@ export function App() {
         return [rem, ...prev];
       });
       showToast(`Remediation task "${rem.id}" updated in demo mode`);
-      return;
+      return true;
     }
     const payload = {
       title: rem.title,
@@ -350,8 +352,10 @@ export function App() {
         return [authoritative, ...prev];
       });
       showToast(`Remediation "${authoritative.id}" saved to NusaSec-Core`);
+      return true;
     } catch (error) {
       showToast(`Remediation save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+      return false;
     }
   };
 
