@@ -110,6 +110,7 @@ export const coreApi = {
   getSalesOpportunities: () => coreRequest<{ items: any[] }>('/api/v1/internal/sales/opportunities?limit=500'),
   getInvoices: () => coreRequest<{ items: any[] }>('/api/v1/internal/finance/invoices?limit=500'),
   getTransactions: () => coreRequest<{ items: any[] }>('/api/v1/internal/finance/transactions?limit=500'),
+  getPricing: () => coreRequest<{ items: any[] }>('/api/v1/internal-ops/pricing?limit=500'),
   getEngineeringDomain: () => coreRequest<any>('/api/v1/internal-control-tower/deep/engineering?limit=300'),
   getEngineeringErrors: () => coreRequest<any>('/api/v1/internal-control-tower/deep/engineering/errors?limit=300'),
   getSecurityDomain: () => coreRequest<any>('/api/v1/internal-control-tower/deep/security?limit=300'),
