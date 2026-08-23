@@ -259,16 +259,101 @@ export function App() {
   const handleOpenCreateModal = (modalType: string, initialData?: any) => { setEditingData(initialData || null); setActiveEditorModal(modalType); };
   const handleCloseEditor = () => { setActiveEditorModal(null); setEditingData(null); };
 
-  // Local-only editors remain explicitly blocked in production until their Core contracts are wired.
-  const ensureProductionMutationContract = () => {
-    if (INTERNAL_DEMO_MODE) return true;
-    showToast('This local editor is disabled in production until its Core mutation contract is wired.');
-    return false;
+  const handleSaveCustomer = async (customer: CustomerProfile) => {
+    if (INTERNAL_DEMO_MODE) {
+      setCustomers((prev) => {
+        const idx = prev.findIndex((c) => c.tenant_id === customer.tenant_id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = customer;
+          return next;
+        }
+        return [customer, ...prev];
+      });
+      showToast(`Tenant "${customer.display_name}" updated in demo mode`);
+      return;
+    }
+    try {
+      const result = await coreApi.updateCustomer(customer.tenant_id, {
+        display_name: customer.display_name,
+        industry: customer.plan,
+        plan: customer.plan,
+      });
+      const authoritative: CustomerProfile = {
+        ...customer,
+        tenant_id: String(result.tenant_id ?? customer.tenant_id),
+        display_name: result.display_name ?? customer.display_name,
+        plan: result.plan ?? customer.plan,
+      };
+      setCustomers((prev) => {
+        const idx = prev.findIndex((c) => c.tenant_id === authoritative.tenant_id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = authoritative;
+          return next;
+        }
+        return [authoritative, ...prev];
+      });
+      showToast(`Tenant "${authoritative.display_name}" saved to NusaSec-Core`);
+    } catch (error) {
+      showToast(`Customer save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+    }
   };
 
-  const handleSaveCustomer = (customer: CustomerProfile) => { if (!ensureProductionMutationContract()) return; setCustomers((prev) => { const idx = prev.findIndex((c) => c.tenant_id === customer.tenant_id); if (idx >= 0) { const next = [...prev]; next[idx] = customer; return next; } return [customer, ...prev]; }); showToast(`Tenant "${customer.display_name}" updated successfully`); };
-  const handleSaveIncident = (incident: EngineeringIncident) => { if (!ensureProductionMutationContract()) return; setIncidents((prev) => { const idx = prev.findIndex((i) => i.incident_key === incident.incident_key); if (idx >= 0) { const next = [...prev]; next[idx] = incident; return next; } return [incident, ...prev]; }); showToast(`Incident "${incident.incident_key}" saved to active triage`); };
-  const handleSaveRemediation = (rem: SecurityRemediationTask) => { if (!ensureProductionMutationContract()) return; setRemediations((prev) => { const idx = prev.findIndex((r) => r.id === rem.id); if (idx >= 0) { const next = [...prev]; next[idx] = rem; return next; } return [rem, ...prev]; }); showToast(`Remediation task "${rem.id}" updated`); };
+  const handleSaveIncident = (incident: EngineeringIncident) => { if (!INTERNAL_DEMO_MODE) { showToast('Incident mutation is not yet wired to a canonical Core contract.'); return; } setIncidents((prev) => { const idx = prev.findIndex((i) => i.incident_key === incident.incident_key); if (idx >= 0) { const next = [...prev]; next[idx] = incident; return next; } return [incident, ...prev]; }); showToast(`Incident "${incident.incident_key}" saved in demo mode`); };
+
+  const handleSaveRemediation = async (rem: SecurityRemediationTask) => {
+    if (INTERNAL_DEMO_MODE) {
+      setRemediations((prev) => {
+        const idx = prev.findIndex((r) => r.id === rem.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = rem;
+          return next;
+        }
+        return [rem, ...prev];
+      });
+      showToast(`Remediation task "${rem.id}" updated in demo mode`);
+      return;
+    }
+    const payload = {
+      title: rem.title,
+      severity: String(rem.severity).toUpperCase(),
+      status: rem.status === 'Resolved' ? 'RESOLVED' : rem.status === 'In Progress' ? 'IN_PROGRESS' : 'OPEN',
+      asset_external_id: rem.asset,
+      remediation_text: rem.framework,
+    };
+    try {
+      const numericId = Number(rem.id);
+      const result = Number.isFinite(numericId) && numericId > 0
+        ? await coreApi.updateRemediation(numericId, payload)
+        : await coreApi.createRemediation({
+            tenant_id: rem.cloud_account,
+            finding_key: rem.id || `UI-${Date.now()}`,
+            ...payload,
+          });
+      const authoritative: SecurityRemediationTask = {
+        ...rem,
+        id: String(result.id ?? rem.id),
+        title: result.title ?? rem.title,
+        severity: result.severity ?? rem.severity,
+        status: String(result.status).toUpperCase() === 'RESOLVED' ? 'Resolved' : rem.status,
+        asset: result.asset_external_id ?? rem.asset,
+      };
+      setRemediations((prev) => {
+        const idx = prev.findIndex((r) => r.id === authoritative.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = authoritative;
+          return next;
+        }
+        return [authoritative, ...prev];
+      });
+      showToast(`Remediation "${authoritative.id}" saved to NusaSec-Core`);
+    } catch (error) {
+      showToast(`Remediation save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+    }
+  };
 
   const handleSavePlan = async (plan: ProductPlanPricing) => {
     if (INTERNAL_DEMO_MODE) {
@@ -302,16 +387,16 @@ export function App() {
     }
   };
 
-  const handleSaveUser = (user: UserAccountRecord) => { if (!ensureProductionMutationContract()) return; setUsers((prev) => { const idx = prev.findIndex((u) => u.id === user.id); if (idx >= 0) { const next = [...prev]; next[idx] = user; return next; } return [user, ...prev]; }); showToast(`User account "${user.display_name}" saved`); };
-  const handleSaveCMS = (art: CMSContentItem) => { if (!ensureProductionMutationContract()) return; setCmsArticles((prev) => { const idx = prev.findIndex((a) => a.id === art.id); if (idx >= 0) { const next = [...prev]; next[idx] = art; return next; } return [art, ...prev]; }); showToast(`Article "${art.title}" updated in CMS`); };
-  const handleSaveCMSPage = (page: CMSPageItem) => { if (!ensureProductionMutationContract()) return; setCmsPages((prev) => { const idx = prev.findIndex((p) => p.id === page.id); if (idx >= 0) { const next = [...prev]; next[idx] = page; return next; } return [page, ...prev]; }); showToast(`Website page "${page.title}" (${page.path}) updated successfully`); };
-  const handleSaveCMSBlock = (block: CMSSectionBlock) => { if (!ensureProductionMutationContract()) return; setCmsBlocks((prev) => { const idx = prev.findIndex((b) => b.id === block.id); if (idx >= 0) { const next = [...prev]; next[idx] = block; return next; } return [block, ...prev]; }); showToast(`Section block "${block.name}" saved to component registry`); };
-  const handleSaveCMSNav = (nav: CMSNavigationItem) => { if (!ensureProductionMutationContract()) return; setCmsNavItems((prev) => { const idx = prev.findIndex((n) => n.id === nav.id); if (idx >= 0) { const next = [...prev]; next[idx] = nav; return next; } return [...prev, nav]; }); showToast(`Navigation item "${nav.label}" updated`); };
-  const handleSaveCMSMedia = (media: CMSMediaAssetItem) => { if (!ensureProductionMutationContract()) return; setCmsMedia((prev) => [media, ...prev]); showToast(`Media asset "${media.name}" uploaded to CDN`); };
-  const handleCreateLead = (lead: CMSInboundLeadItem) => { if (!ensureProductionMutationContract()) return; setCmsLeads((prev) => [lead, ...prev]); showToast(`🚀 Inbound inquiry received from ${lead.full_name} (${lead.company})! Added to pipeline.`, 'success'); };
-  const handleUpdateLeadStatus = (leadId: string, newStatus: any) => { if (!ensureProductionMutationContract()) return; setCmsLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))); };
+  const handleSaveUser = (user: UserAccountRecord) => { if (!INTERNAL_DEMO_MODE) { showToast('User mutation is not yet wired to a canonical Core contract.'); return; } setUsers((prev) => { const idx = prev.findIndex((u) => u.id === user.id); if (idx >= 0) { const next = [...prev]; next[idx] = user; return next; } return [user, ...prev]; }); showToast(`User account "${user.display_name}" saved in demo mode`); };
+  const handleSaveCMS = (art: CMSContentItem) => { if (!INTERNAL_DEMO_MODE) { showToast('CMS article mutation is not yet wired to a canonical Core contract.'); return; } setCmsArticles((prev) => { const idx = prev.findIndex((a) => a.id === art.id); if (idx >= 0) { const next = [...prev]; next[idx] = art; return next; } return [art, ...prev]; }); showToast(`Article "${art.title}" updated in demo mode`); };
+  const handleSaveCMSPage = (page: CMSPageItem) => { if (!INTERNAL_DEMO_MODE) { showToast('CMS page mutation is not yet wired to a canonical Core contract.'); return; } setCmsPages((prev) => { const idx = prev.findIndex((p) => p.id === page.id); if (idx >= 0) { const next = [...prev]; next[idx] = page; return next; } return [page, ...prev]; }); showToast(`Website page "${page.title}" updated in demo mode`); };
+  const handleSaveCMSBlock = (block: CMSSectionBlock) => { if (!INTERNAL_DEMO_MODE) { showToast('CMS block mutation is not yet wired to a canonical Core contract.'); return; } setCmsBlocks((prev) => { const idx = prev.findIndex((b) => b.id === block.id); if (idx >= 0) { const next = [...prev]; next[idx] = block; return next; } return [block, ...prev]; }); showToast(`Section block "${block.name}" saved in demo mode`); };
+  const handleSaveCMSNav = (nav: CMSNavigationItem) => { if (!INTERNAL_DEMO_MODE) { showToast('CMS navigation mutation is not yet wired to a canonical Core contract.'); return; } setCmsNavItems((prev) => { const idx = prev.findIndex((n) => n.id === nav.id); if (idx >= 0) { const next = [...prev]; next[idx] = nav; return next; } return [...prev, nav]; }); showToast(`Navigation item "${nav.label}" updated in demo mode`); };
+  const handleSaveCMSMedia = (media: CMSMediaAssetItem) => { if (!INTERNAL_DEMO_MODE) { showToast('CMS media mutation is not yet wired to a canonical Core contract.'); return; } setCmsMedia((prev) => [media, ...prev]); showToast(`Media asset "${media.name}" saved in demo mode`); };
+  const handleCreateLead = (lead: CMSInboundLeadItem) => { if (!INTERNAL_DEMO_MODE) { showToast('Lead mutation is not yet wired to a canonical Core contract.'); return; } setCmsLeads((prev) => [lead, ...prev]); showToast(`Inbound inquiry from ${lead.full_name} added in demo mode`); };
+  const handleUpdateLeadStatus = (leadId: string, newStatus: any) => { if (!INTERNAL_DEMO_MODE) { showToast('Lead status mutation is not yet wired to a canonical Core contract.'); return; } setCmsLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))); };
   const handleOpenLivePreview = (page?: CMSPageItem | null, article?: CMSContentItem | null) => { setLivePreviewPage(page || cmsPages[0] || null); setLivePreviewArticle(article || null); setIsLivePreviewOpen(true); };
-  const handleSaveMigration = (mig: DataMigrationPlan) => { if (!ensureProductionMutationContract()) return; setMigrations((prev) => { const idx = prev.findIndex((m) => m.plan_key === mig.plan_key); if (idx >= 0) { const next = [...prev]; next[idx] = mig; return next; } return [mig, ...prev]; }); showToast(`Data migration plan "${mig.dataset}" saved`); };
+  const handleSaveMigration = (mig: DataMigrationPlan) => { if (!INTERNAL_DEMO_MODE) { showToast('Migration mutation is not yet wired to a canonical Core contract.'); return; } setMigrations((prev) => { const idx = prev.findIndex((m) => m.plan_key === mig.plan_key); if (idx >= 0) { const next = [...prev]; next[idx] = mig; return next; } return [mig, ...prev]; }); showToast(`Data migration plan "${mig.dataset}" saved in demo mode`); };
 
   const handleSaveOpportunity = async (opp: SalesOpportunity) => {
     if (INTERNAL_DEMO_MODE) {
@@ -349,10 +434,10 @@ export function App() {
     }
   };
 
-  const handleSaveProduct = (prod: ProductDefinitionItem) => { if (!ensureProductionMutationContract()) return; setProducts((prev) => { const idx = prev.findIndex((p) => p.id === prod.id || p.code === prod.code); if (idx >= 0) { const next = [...prev]; next[idx] = prod; return next; } return [prod, ...prev]; }); showToast(`Product "${prod.name}" catalog definition saved`); };
-  const handleSaveAddOn = (addon: ProductAddOn) => { if (!ensureProductionMutationContract()) return; setAddOns((prev) => { const idx = prev.findIndex((a) => a.id === addon.id || a.code === addon.code); if (idx >= 0) { const next = [...prev]; next[idx] = addon; return next; } return [addon, ...prev]; }); showToast(`Add-On "${addon.name}" scheme published`); };
-  const handleSaveClientUser = (user: ClientTenantUser) => { if (!ensureProductionMutationContract()) return; setClientUsers((prev) => { const idx = prev.findIndex((u) => u.id === user.id); if (idx >= 0) { const next = [...prev]; next[idx] = user; return next; } return [user, ...prev]; }); setCustomers((prev) => prev.map((c) => { if (c.tenant_id === user.tenant_id) { const tenantUsers = clientUsers.filter((u) => u.tenant_id === user.tenant_id && u.id !== user.id); const newTotal = tenantUsers.length + (user.status === 'active' ? 1 : 0); return { ...c, seats_used: newTotal }; } return c; })); if (user.status === 'seat_locked') showToast(`User ${user.name} added as SEAT LOCKED (Tenant over quota limit). Upgrade seats to unlock.`); else showToast(`Client team member "${user.name}" assigned active seat`); };
-  const handleUpgradeSeats = (tenantId: string, additionalSeats: number, selectedAddOnCode?: string) => { if (!ensureProductionMutationContract()) return; setCustomers((prev) => prev.map((c) => { if (c.tenant_id === tenantId) { const currentAddons = c.active_addons || []; const updatedAddons = selectedAddOnCode && !currentAddons.includes(selectedAddOnCode) ? [...currentAddons, selectedAddOnCode] : currentAddons; return { ...c, seats_allocated: (c.seats_allocated || 10) + additionalSeats, active_addons: updatedAddons }; } return c; })); setClientUsers((prev) => { const tenantUsers = prev.filter((u) => u.tenant_id === tenantId); const lockedUsers = tenantUsers.filter((u) => u.status === 'seat_locked'); if (lockedUsers.length > 0) return prev.map((u) => u.tenant_id === tenantId && u.status === 'seat_locked' ? { ...u, status: 'active' as const, seat_assigned: true } : u); return prev; }); showToast(`Successfully expanded tenant quota by +${additionalSeats} seats and applied Add-On`); };
+  const handleSaveProduct = (prod: ProductDefinitionItem) => { if (!INTERNAL_DEMO_MODE) { showToast('Product mutation is not yet wired to a canonical Core contract.'); return; } setProducts((prev) => { const idx = prev.findIndex((p) => p.id === prod.id || p.code === prod.code); if (idx >= 0) { const next = [...prev]; next[idx] = prod; return next; } return [prod, ...prev]; }); showToast(`Product "${prod.name}" saved in demo mode`); };
+  const handleSaveAddOn = (addon: ProductAddOn) => { if (!INTERNAL_DEMO_MODE) { showToast('Add-On mutation is not yet wired to a canonical Core contract.'); return; } setAddOns((prev) => { const idx = prev.findIndex((a) => a.id === addon.id || a.code === addon.code); if (idx >= 0) { const next = [...prev]; next[idx] = addon; return next; } return [addon, ...prev]; }); showToast(`Add-On "${addon.name}" saved in demo mode`); };
+  const handleSaveClientUser = (user: ClientTenantUser) => { if (!INTERNAL_DEMO_MODE) { showToast('Client user mutation is not yet wired to a canonical Core contract.'); return; } setClientUsers((prev) => { const idx = prev.findIndex((u) => u.id === user.id); if (idx >= 0) { const next = [...prev]; next[idx] = user; return next; } return [user, ...prev]; }); setCustomers((prev) => prev.map((c) => { if (c.tenant_id === user.tenant_id) { const tenantUsers = clientUsers.filter((u) => u.tenant_id === user.tenant_id && u.id !== user.id); const newTotal = tenantUsers.length + (user.status === 'active' ? 1 : 0); return { ...c, seats_used: newTotal }; } return c; })); if (user.status === 'seat_locked') showToast(`User ${user.name} added as SEAT LOCKED in demo mode.`); else showToast(`Client team member "${user.name}" assigned active seat in demo mode`); };
+  const handleUpgradeSeats = (tenantId: string, additionalSeats: number, selectedAddOnCode?: string) => { if (!INTERNAL_DEMO_MODE) { showToast('Seat upgrade mutation is not yet wired to a canonical Core contract.'); return; } setCustomers((prev) => prev.map((c) => { if (c.tenant_id === tenantId) { const currentAddons = c.active_addons || []; const updatedAddons = selectedAddOnCode && !currentAddons.includes(selectedAddOnCode) ? [...currentAddons, selectedAddOnCode] : currentAddons; return { ...c, seats_allocated: (c.seats_allocated || 10) + additionalSeats, active_addons: updatedAddons }; } return c; })); setClientUsers((prev) => { const tenantUsers = prev.filter((u) => u.tenant_id === tenantId); const lockedUsers = tenantUsers.filter((u) => u.status === 'seat_locked'); if (lockedUsers.length > 0) return prev.map((u) => u.tenant_id === tenantId && u.status === 'seat_locked' ? { ...u, status: 'active' as const, seat_assigned: true } : u); return prev; }); showToast(`Successfully expanded tenant quota by +${additionalSeats} seats in demo mode`); };
   const handleOpenUpgradeModal = (tenantId: string) => { setUpgradeTargetTenantId(tenantId); setActiveEditorModal('client_seat_upgrade'); };
 
   const handleSaveWorkItem = async (item: RoleWorkItem) => {
