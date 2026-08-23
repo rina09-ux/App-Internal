@@ -464,7 +464,7 @@ export const SecurityRemediationModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   remediation?: SecurityRemediationTask | null;
-  onSave: (task: SecurityRemediationTask) => void;
+  onSave: (task: SecurityRemediationTask) => Promise<boolean>;
 }> = ({ isOpen, onClose, remediation, onSave }) => {
   const [formData, setFormData] = useState<SecurityRemediationTask>({
     id: `REM-${draftId('')}`,
@@ -496,11 +496,15 @@ export const SecurityRemediationModal: React.FC<{
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
-    onSave(formData);
-    onClose();
+  
+    const success = await onSave(formData);
+  
+    if (success) {
+      onClose();
+    }
   };
 
   return (
