@@ -151,4 +151,7 @@ export const coreApi = {
   createDocument: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/documents', { method: 'POST', body: JSON.stringify(payload) }),
   updatePricing: (productCode: string, planCode: string, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal-ops/pricing/${encodeURIComponent(productCode)}/${encodeURIComponent(planCode)}`, { method: 'PUT', body: JSON.stringify(payload) }),
   updateAccountStatus: (id: number, status: 'ACTIVE' | 'SUSPENDED' | 'OFFBOARDING') => coreRequest<any>(`/api/v1/internal/identity/accounts/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  updateCustomer: (tenantId: string, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal/customers/${encodeURIComponent(tenantId)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  createRemediation: (payload: Record<string, unknown>) => coreRequest<any>('/api/v1/internal/security/remediations', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRemediation: (id: number, payload: Record<string, unknown>) => coreRequest<any>(`/api/v1/internal/security/remediations/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 };
