@@ -1,3 +1,4 @@
+# One-shot async mutation patcher. This comment retriggers the push workflow.
 name: Apply async mutation patch
 
 on:
@@ -16,8 +17,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Apply precise async mutation patch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -27,158 +26,114 @@ jobs:
           text = app.read_text(encoding='utf-8')
 
           customer = '''  const handleSaveCustomer = async (customer: CustomerProfile): Promise<boolean> => {
-            if (INTERNAL_DEMO_MODE) {
-              setCustomers((prev) => {
-                const idx = prev.findIndex((c) => c.tenant_id === customer.tenant_id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = customer;
-                  return next;
-                }
-                return [customer, ...prev];
-              });
-              showToast(`Tenant "${customer.display_name}" updated in demo mode`);
-              return true;
-            }
-            try {
-              const result = await coreApi.updateCustomer(customer.tenant_id, {
-                display_name: customer.display_name,
-                industry: customer.plan,
-                plan: customer.plan,
-              });
-              const authoritative: CustomerProfile = {
-                ...customer,
-                tenant_id: String(result.tenant_id ?? customer.tenant_id),
-                display_name: result.display_name ?? customer.display_name,
-                plan: result.plan ?? customer.plan,
-              };
-              setCustomers((prev) => {
-                const idx = prev.findIndex((c) => c.tenant_id === authoritative.tenant_id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = authoritative;
-                  return next;
-                }
-                return [authoritative, ...prev];
-              });
-              showToast(`Tenant "${authoritative.display_name}" saved to NusaSec-Core`);
-              return true;
-            } catch (error) {
-              showToast(`Customer save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
-              return false;
-            }
-          };'''
-
+    if (INTERNAL_DEMO_MODE) {
+      setCustomers((prev) => {
+        const idx = prev.findIndex((c) => c.tenant_id === customer.tenant_id);
+        if (idx >= 0) { const next = [...prev]; next[idx] = customer; return next; }
+        return [customer, ...prev];
+      });
+      showToast(`Tenant "${customer.display_name}" updated in demo mode`);
+      return true;
+    }
+    try {
+      const result = await coreApi.updateCustomer(customer.tenant_id, {
+        display_name: customer.display_name,
+        industry: customer.plan,
+        plan: customer.plan,
+      });
+      const authoritative: CustomerProfile = {
+        ...customer,
+        tenant_id: String(result.tenant_id ?? customer.tenant_id),
+        display_name: result.display_name ?? customer.display_name,
+        plan: result.plan ?? customer.plan,
+      };
+      setCustomers((prev) => {
+        const idx = prev.findIndex((c) => c.tenant_id === authoritative.tenant_id);
+        if (idx >= 0) { const next = [...prev]; next[idx] = authoritative; return next; }
+        return [authoritative, ...prev];
+      });
+      showToast(`Tenant "${authoritative.display_name}" saved to NusaSec-Core`);
+      return true;
+    } catch (error) {
+      showToast(`Customer save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+      return false;
+    }
+  };'''
           remediation = '''  const handleSaveRemediation = async (rem: SecurityRemediationTask): Promise<boolean> => {
-            if (INTERNAL_DEMO_MODE) {
-              setRemediations((prev) => {
-                const idx = prev.findIndex((r) => r.id === rem.id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = rem;
-                  return next;
-                }
-                return [rem, ...prev];
-              });
-              showToast(`Remediation task "${rem.id}" updated in demo mode`);
-              return true;
-            }
-            const payload = {
-              title: rem.title,
-              severity: String(rem.severity).toUpperCase(),
-              status: rem.status === 'Resolved' ? 'RESOLVED' : rem.status === 'In Progress' ? 'IN_PROGRESS' : 'OPEN',
-              asset_external_id: rem.asset,
-              remediation_text: rem.framework,
-            };
-            try {
-              const numericId = Number(rem.id);
-              const result = Number.isFinite(numericId) && numericId > 0
-                ? await coreApi.updateRemediation(numericId, payload)
-                : await coreApi.createRemediation({
-                    tenant_id: rem.cloud_account,
-                    finding_key: rem.id || `UI-${Date.now()}`,
-                    ...payload,
-                  });
-              const authoritative: SecurityRemediationTask = {
-                ...rem,
-                id: String(result.id ?? rem.id),
-                title: result.title ?? rem.title,
-                severity: result.severity ?? rem.severity,
-                status: String(result.status).toUpperCase() === 'RESOLVED' ? 'Resolved' : rem.status,
-                asset: result.asset_external_id ?? rem.asset,
-              };
-              setRemediations((prev) => {
-                const idx = prev.findIndex((r) => r.id === authoritative.id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = authoritative;
-                  return next;
-                }
-                return [authoritative, ...prev];
-              });
-              showToast(`Remediation "${authoritative.id}" saved to NusaSec-Core`);
-              return true;
-            } catch (error) {
-              showToast(`Remediation save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
-              return false;
-            }
-          };'''
-
-          pattern_customer = r"  const handleSaveCustomer = .*?\n  \};\n\n  const handleSaveIncident"
-          replacement_customer = customer + "\n\n  const handleSaveIncident"
-          text, n1 = re.subn(pattern_customer, replacement_customer, text, count=1, flags=re.S)
-          if n1 != 1:
-              raise SystemExit('Customer handler pattern not found')
-
-          pattern_rem = r"  const handleSaveRemediation = .*?\n  \};\n\n  const handleSavePlan"
-          replacement_rem = remediation + "\n\n  const handleSavePlan"
-          text, n2 = re.subn(pattern_rem, replacement_rem, text, count=1, flags=re.S)
-          if n2 != 1:
-              raise SystemExit('Remediation handler pattern not found')
-
+    if (INTERNAL_DEMO_MODE) {
+      setRemediations((prev) => {
+        const idx = prev.findIndex((r) => r.id === rem.id);
+        if (idx >= 0) { const next = [...prev]; next[idx] = rem; return next; }
+        return [rem, ...prev];
+      });
+      showToast(`Remediation task "${rem.id}" updated in demo mode`);
+      return true;
+    }
+    const payload = {
+      title: rem.title,
+      severity: String(rem.severity).toUpperCase(),
+      status: rem.status === 'Resolved' ? 'RESOLVED' : rem.status === 'In Progress' ? 'IN_PROGRESS' : 'OPEN',
+      asset_external_id: rem.asset,
+      remediation_text: rem.framework,
+    };
+    try {
+      const numericId = Number(rem.id);
+      const result = Number.isFinite(numericId) && numericId > 0
+        ? await coreApi.updateRemediation(numericId, payload)
+        : await coreApi.createRemediation({ tenant_id: rem.cloud_account, finding_key: rem.id || `UI-${Date.now()}`, ...payload });
+      const authoritative: SecurityRemediationTask = {
+        ...rem,
+        id: String(result.id ?? rem.id),
+        title: result.title ?? rem.title,
+        severity: result.severity ?? rem.severity,
+        status: String(result.status).toUpperCase() === 'RESOLVED' ? 'Resolved' : rem.status,
+        asset: result.asset_external_id ?? rem.asset,
+      };
+      setRemediations((prev) => {
+        const idx = prev.findIndex((r) => r.id === authoritative.id);
+        if (idx >= 0) { const next = [...prev]; next[idx] = authoritative; return next; }
+        return [authoritative, ...prev];
+      });
+      showToast(`Remediation "${authoritative.id}" saved to NusaSec-Core`);
+      return true;
+    } catch (error) {
+      showToast(`Remediation save failed: ${error instanceof Error ? error.message : 'Core request failed'}`);
+      return false;
+    }
+  };'''
+          text, n1 = re.subn(r"  const handleSaveCustomer = .*?\n  \};\n\n  const handleSaveIncident", customer + "\n\n  const handleSaveIncident", text, count=1, flags=re.S)
+          if n1 != 1: raise SystemExit('Customer handler pattern not found')
+          text, n2 = re.subn(r"  const handleSaveRemediation = .*?\n  \};\n\n  const handleSavePlan", remediation + "\n\n  const handleSavePlan", text, count=1, flags=re.S)
+          if n2 != 1: raise SystemExit('Remediation handler pattern not found')
           app.write_text(text, encoding='utf-8')
 
           modal = Path('src/components/modals/EntityEditorModals.tsx')
           m = modal.read_text(encoding='utf-8')
-
-          customer_section, count = re.subn(
-              r"(export const CustomerEditorModal: React\.FC<\{.*?onSave: \(customer: CustomerProfile\) => )void(.*?\}\> = \(\{ isOpen, onClose, customer, onSave \} \) => \{.*?const handleSubmit = )\(e: React\.FormEvent\) => \{.*?\n  \};",
-              lambda x: x.group(1) + 'Promise<boolean>' + x.group(2) + "async (e: React.FormEvent) => {\n    e.preventDefault();\n    if (!formData.display_name.trim()) return;\n    const success = await onSave(formData);\n    if (success) onClose();\n  };",
-              m,
-              count=1,
-              flags=re.S,
-          )
-          if count != 1:
-              raise SystemExit('Customer modal pattern not found')
-          m = customer_section
-
-          m2, count = re.subn(
-              r"(export const SecurityRemediationModal: React\.FC<\{.*?onSave: \(task: SecurityRemediationTask\) => )void(.*?\}\> = \(\{ isOpen, onClose, remediation, onSave \} \) => \{.*?const handleSubmit = )\(e: React\.FormEvent\) => \{.*?\n  \};",
-              lambda x: x.group(1) + 'Promise<boolean>' + x.group(2) + "async (e: React.FormEvent) => {\n    e.preventDefault();\n    if (!formData.title.trim()) return;\n    const success = await onSave(formData);\n    if (success) onClose();\n  };",
-              m,
-              count=1,
-              flags=re.S,
-          )
-          if count != 1:
-              raise SystemExit('Remediation modal pattern not found')
-          modal.write_text(m2, encoding='utf-8')
+          s, n = re.subn(r"(export const CustomerEditorModal: React\.FC<\{.*?onSave: \(customer: CustomerProfile\) => )void(.*?const handleSubmit = )\(e: React\.FormEvent\) => \{.*?\n  \};", lambda x: x.group(1)+'Promise<boolean>'+x.group(2)+"async (e: React.FormEvent) => {\n    e.preventDefault();\n    if (!formData.display_name.trim()) return;\n    const success = await onSave(formData);\n    if (success) onClose();\n  };", m, count=1, flags=re.S)
+          if n != 1: raise SystemExit('Customer modal pattern not found')
+          s, n = re.subn(r"(export const SecurityRemediationModal: React\.FC<\{.*?onSave: \(task: SecurityRemediationTask\) => )void(.*?const handleSubmit = )\(e: React\.FormEvent\) => \{.*?\n  \};", lambda x: x.group(1)+'Promise<boolean>'+x.group(2)+"async (e: React.FormEvent) => {\n    e.preventDefault();\n    if (!formData.title.trim()) return;\n    const success = await onSave(formData);\n    if (success) onClose();\n  };", s, count=1, flags=re.S)
+          if n != 1: raise SystemExit('Remediation modal pattern not found')
+          modal.write_text(s, encoding='utf-8')
           PY
 
       - name: Verify async contracts
         run: |
           python - <<'PY'
           from pathlib import Path
-          app = Path('src/App.tsx').read_text(encoding='utf-8')
-          modal = Path('src/components/modals/EntityEditorModals.tsx').read_text(encoding='utf-8')
-          assert 'const handleSaveCustomer = async (customer: CustomerProfile): Promise<boolean>' in app
-          assert 'const handleSaveRemediation = async (rem: SecurityRemediationTask): Promise<boolean>' in app
-          assert 'onSave: (customer: CustomerProfile) => Promise<boolean>' in modal
-          assert 'onSave: (task: SecurityRemediationTask) => Promise<boolean>' in modal
-          assert 'const success = await onSave(formData);' in modal
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
+          modal=Path('src/components/modals/EntityEditorModals.tsx').read_text(encoding='utf-8')
+          checks=[
+            'const handleSaveCustomer = async (customer: CustomerProfile): Promise<boolean>',
+            'const handleSaveRemediation = async (rem: SecurityRemediationTask): Promise<boolean>',
+            'onSave: (customer: CustomerProfile) => Promise<boolean>',
+            'onSave: (task: SecurityRemediationTask) => Promise<boolean>',
+            'const success = await onSave(formData);',
+          ]
+          if not all(c in (app+"\n"+modal) for c in checks): raise SystemExit('async contract verification failed')
           print('async mutation contracts: PASS')
           PY
 
-      - name: Commit and remove patcher
+      - name: Commit changes and remove patcher
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
