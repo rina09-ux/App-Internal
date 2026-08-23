@@ -70,7 +70,7 @@ export const CustomerEditorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   customer?: CustomerProfile | null;
-  onSave: (customer: CustomerProfile) => void;
+  onSave: (customer: CustomerProfile) => Promise<boolean>;
 }> = ({ isOpen, onClose, customer, onSave }) => {
   const [formData, setFormData] = useState<CustomerProfile>({
     tenant_id: draftId('cust'),
